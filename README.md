@@ -294,7 +294,7 @@ sudo mv promtail-linux-amd64 /usr/local/bin/promtail
 ```
 Here's the content converted into Markdown format:
 
-```markdown
+```
 ## 4. Setting up Grafana, Prometheus, and Loki in Docker
 
 ### 4.1 Install Grafana with Docker Image
