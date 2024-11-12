@@ -108,4 +108,188 @@ WHERE
 ```
 
 More details: [MySQL Integration](https://grafana.com/docs/grafana/latest/datasources/mysql).
+Here’s the content converted into Markdown format:
+
+```markdown
+## 3. Setting up Grafana with Middleware (Prometheus, Loki) in Different Environments
+Grafana works best when paired with middleware like Prometheus (for metrics) and Loki (for logs). In this section, we’ll install and configure Grafana with these middleware in various environments, giving you a strong foundation for monitoring.
+
+### 3.1 Configuration of Grafana In Traditional Data Center
+#### Setting up Grafana and Middleware in a Traditional Data Center (on Physical Servers)
+In a traditional data center setup, you can run Grafana alongside Prometheus and Loki on physical Linux servers. This setup gives you full control over both hardware and software, but scaling may require manual intervention.
+
+---
+
+#### 3.1.1 Server Preparation in a Traditional Data Center
+Ensure your server runs a supported operating system (e.g., Ubuntu, Debian, CentOS).
+
+For Ubuntu/Debian:
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+For CentOS:
+```bash
+sudo yum update -y
+```
+
+##### For Setup on Ubuntu:
+```bash
+sudo apt-get install -y software-properties-common
+sudo add-apt-repository "deb https://packages.grafana.com/oss/deb stable main"
+sudo apt update && sudo apt install grafana -y
+```
+
+##### For CentOS:
+```bash
+sudo yum install -y https://packages.grafana.com/oss/rpm/grafana-8.0.0-1.x86_64.rpm
+```
+
+##### Start Grafana:
+```bash
+sudo systemctl start grafana-server
+sudo systemctl enable grafana-server
+```
+
+##### Access Grafana UI:
+Adjust firewall settings to allow traffic on Grafana’s default port (3000). Open a web browser and go to `http://<your_server_ip>:3000`. Log in with the default credentials (`admin / admin`).
+
+---
+
+### 3.1.2 Guide for Setting up Prometheus Including Node Exporter as a Service
+##### Create a Dedicated User for Prometheus & Node Exporter:
+```bash
+useradd --no-create-home --shell /bin/false prometheus
+useradd --no-create-home --shell /bin/false node_exporter
+```
+
+##### Create Required Directories:
+```bash
+mkdir /etc/prometheus
+mkdir /var/lib/prometheus
+chown prometheus:prometheus /etc/prometheus
+chown prometheus:prometheus /var/lib/prometheus
+```
+
+##### Download and Install Prometheus:
+```bash
+wget https://github.com/prometheus/prometheus/releases/download/v2.41.0/prometheus-2.41.0.linux-amd64.tar.gz
+tar -xzvf prometheus-2.41.0.linux-amd64.tar.gz
+cp prometheus-2.41.0.linux-amd64/prometheus /usr/local/bin/
+cp prometheus-2.41.0.linux-amd64/promtool /usr/local/bin/
+```
+
+##### Create a Systemd Service for Prometheus:
+```bash
+sudo nano /etc/systemd/system/prometheus.service
+```
+
+Add the following content to the file:
+```
+[Unit]
+Description=Prometheus
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+Type=simple
+ExecStart=/usr/local/bin/prometheus \
+--config.file /etc/prometheus/prometheus.yml \
+--storage.tsdb.path /var/lib/prometheus/ \
+--web.console.templates=/etc/prometheus/consoles \
+--web.console.libraries=/etc/prometheus/console_libraries
+
+[Install]
+WantedBy=multi-user.target
+```
+
+##### Copy Configuration Files and Libraries:
+```bash
+cp -r prometheus-2.41.0.linux-amd64/consoles /etc/prometheus
+cp -r prometheus-2.41.0.linux-amd64/console_libraries /etc/prometheus
+cp prometheus-2.41.0.linux-amd64/prometheus.yml /etc/prometheus/prometheus.yml
+chown -R prometheus:prometheus /etc/prometheus
+```
+
+##### Install Node Exporter as a Service:
+```bash
+wget https://github.com/prometheus/node_exporter/releases/download/v1.5.0/node_exporter-1.5.0.linux-amd64.tar.gz
+tar -xzvf node_exporter-1.5.0.linux-amd64.tar.gz
+cp node_exporter-1.5.0.linux-amd64/node_exporter /usr/local/bin/
+```
+
+##### Create a Systemd Service for Node Exporter:
+```bash
+sudo nano /etc/systemd/system/node_exporter.service
+```
+
+Add the following content to the file:
+```
+[Unit]
+Description=Node Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+```
+
+##### Configure Prometheus to Scrape Node Exporter:
+```bash
+sudo nano /etc/prometheus/prometheus.yml
+```
+
+Add the following configuration:
+```yaml
+scrape_configs:
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+```
+
+##### Start and Enable Prometheus & Node Exporter:
+```bash
+systemctl daemon-reload
+systemctl start node_exporter
+systemctl enable node_exporter
+systemctl start prometheus
+systemctl enable prometheus
+```
+
+---
+
+### 3.1.3 Guide for Setting up Loki (for Logs) Including Promtail as a Service
+##### Download and Install Loki:
+```bash
+wget https://github.com/grafana/loki/releases/download/v2.8.0/loki-linux-amd64.zip
+unzip loki-linux-amd64.zip
+chmod +x loki-linux-amd64
+sudo mv loki-linux-amd64 /usr/local/bin/loki
+```
+
+##### Create a Configuration File for Loki:
+```bash
+sudo nano /etc/loki/loki-config.yaml
+```
+
+##### Create a Systemd Service for Loki:
+```bash
+sudo nano /etc/systemd/system/loki.service
+```
+
+##### Download and Install Promtail:
+```bash
+wget https://github.com/grafana/loki/releases/download/v2.8.0/promtail-linux-amd64.zip
+unzip promtail-linux-amd64.zip
+chmod +x promtail-linux-amd64
+sudo mv promtail-linux-amd64 /usr/local/bin/promtail
+```
 ```
