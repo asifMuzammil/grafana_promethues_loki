@@ -60,7 +60,7 @@ Once you have Prometheus running, add it as a data source in Grafana by navigati
 
 **Additional Resource:** Looking for pre-built Prometheus alerting rules? Check out this [Awesome Prometheus Alerts page](#) for a comprehensive collection of alerting rules tailored for Kubernetes environments.
 
-[Need more details? Visit the official Prometheus Integration in Grafana](#).
+[Need more details? Visit the official Prometheus Integration in Grafana](https://prometheus.io/docs/grafana/latest/).
 
 ---
 
@@ -76,7 +76,7 @@ Add Loki as a data source by selecting `Configuration > Data Sources` in Grafana
   {job="grafana"} |= "error"
   ```
 
-Find more in the [Loki documentation](#).
+Find more in the [Loki documentation](https://grafana.com/docs/loki/latest/).
 
 ---
 
@@ -86,7 +86,7 @@ If you're running infrastructure on AWS, connecting CloudWatch to Grafana is a m
 #### How to integrate CloudWatch:
 In Grafana, go to `Data Sources > Add Data Source` and choose CloudWatch. You'll need to enter your AWS credentials or set up access through IAM roles.
 
-Check out the [CloudWatch Integration documentation](#) for more.
+Check out the [CloudWatch Integration documentation](https://grafana.com/docs/grafana/latest/datasources/cloudwatch/) for more.
 
 ---
 
@@ -292,4 +292,236 @@ unzip promtail-linux-amd64.zip
 chmod +x promtail-linux-amd64
 sudo mv promtail-linux-amd64 /usr/local/bin/promtail
 ```
+Here's the content converted into Markdown format:
+
+```markdown
+## 4. Setting up Grafana, Prometheus, and Loki in Docker
+
+### 4.1 Install Grafana with Docker Image
+#### Pull and Run the Grafana Docker Container:
+```bash
+docker run -d --name=grafana -p 3000:3000 grafana/grafana
+```
+
+#### Explanation for Docker command:
+- `-d`: Runs the container in detached mode, allowing it to run in the background.
+- `--name=grafana`: Names the container “grafana” for easier management.
+- `-p 3000:3000`: Maps port 3000 on the Docker host to port 3000 on the container, making Grafana accessible at `http://<docker-host-ip>:3000`.
+
+#### Access Grafana on Docker Host:
+Open a browser and go to `http://<docker-host-ip>:3000`. Log in with the default credentials: **Username:** `admin` | **Password:** `admin`. (You’ll be prompted to change the password after logging in.)
+
+---
+
+### 4.1.2 Install Prometheus with Docker
+#### Create a `prometheus.yml` configuration file on your Docker host, defining the scrape targets. For example:
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['<node-exporter-ip>:9100']
+```
+
+#### Pull and Run the Prometheus Docker Container:
+```bash
+docker run -d --name=prometheus -p 9090:9090 -v /path/to/prometheus.yml:/etc/prometheus/prometheus.yml prom/prometheus
+```
+
+#### Explanation for Docker command:
+- `-v /path/to/prometheus.yml:/etc/prometheus/prometheus.yml`: Mounts the configuration file from the host to the container.
+
+#### Access Prometheus:
+Open a browser and go to `http://<docker-host-ip>:9090` to access the Prometheus interface.
+
+---
+
+### 4.1.3 Install Loki
+Loki is a log aggregation system designed to work closely with Prometheus. Running Loki in Docker also requires mounting a configuration file to define how Loki manages and stores logs.
+
+#### Prepare a Loki Configuration File (`loki-config.yaml`):
+Create a `loki-config.yaml` file on your Docker host with a configuration that specifies where logs are stored and how they are indexed. Here’s a basic example:
+```yaml
+auth_enabled: false
+server:
+  http_listen_port: 3100
+ingester:
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+  chunk_idle_period: 5m
+  max_chunk_age: 1h
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+storage_config:
+  boltdb_shipper:
+    active_index_directory: /loki/index
+    cache_location: /loki/cache
+    shared_store: filesystem
+  filesystem:
+    directory: /loki/chunks
+```
+
+---
+
+### 4.1.4 Pull and Run the Loki Docker Container:
+```bash
+docker run -d --name=loki -p 3100:3100 -v /path/to/loki-config.yaml:/etc/loki/local-config.yaml grafana/loki:2.4.1 -config.file=/etc/loki/local-config.yaml
+```
+Here's the content converted into Markdown format:
+
+```markdown
+## 5. Setting up Grafana and Middleware in Kubernetes (Using Helm)
+Using Helm, we’ll deploy Grafana, Prometheus, and Loki as services in Kubernetes. Helm simplifies installations by packaging these tools with sensible defaults and providing easy upgrade paths.
+
+### 5.1 Install Grafana Using Helm
+Grafana is a popular tool for monitoring and visualization. Helm enables a quick setup of Grafana with customizable configurations.
+
+#### Step 1: Add the Grafana Helm repository:
+```bash
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+```
+
+#### Step 2: Install Grafana in the monitoring namespace:
+```bash
+kubectl create namespace monitoring
+helm install grafana grafana/grafana --namespace monitoring --set ingress.enabled=true --set persistence.enabled=true
+```
+
+---
+
+### 5.2 Install Prometheus Using Helm
+Prometheus, combined with the Prometheus Operator, provides monitoring capabilities, including automated discovery and alerting for Kubernetes resources.
+
+#### Step 1: Add the Prometheus Helm repository:
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+```
+
+#### Step 2: Install Prometheus Operator (Kube-Prometheus-Stack) in the monitoring namespace:
+```bash
+helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring
+```
+
+---
+
+### 5.3 Install Loki Using Helm
+Loki provides log aggregation, which integrates well with Prometheus and Grafana for unified metrics and logs. The Loki Helm chart includes Promtail for log collection from Kubernetes pods.
+
+#### Step 1: Install the Loki Stack:
+```bash
+helm install loki grafana/loki-stack --namespace monitoring
+```
+The `loki-stack` chart includes Loki for log aggregation and Promtail to collect logs from Kubernetes pods and forward them to Loki.
+
+#### Step 2: Access Loki Logs in Grafana:
+Grafana, installed with the Kube-Prometheus-Stack, should already have Loki as a data source. You can visualize logs by creating a dashboard in Grafana and selecting Loki as the data source.
+
+---
+
+### 5.4 Using Kubernetes Services as Data Source Endpoints in Grafana
+#### 1. Understanding Kubernetes Service Endpoints
+In Kubernetes, when you create a Service, it provides a stable DNS name and IP address that other pods in the cluster can use to communicate with the service. For example:
+
+- **Prometheus Service:** When you deploy Prometheus with Helm, it typically creates a service called `Prometheus-operated` (or similar), accessible at `http://prometheus-operated.monitoring.svc.cluster.local`.
+- **Loki Service:** Similarly, Loki creates a service accessible at a stable endpoint, like `http://loki.monitoring.svc.cluster.local`.
+
+#### 2. Configure Grafana Data Sources to Use Service Endpoints
+Since Grafana is in the same namespace (or at least the same cluster), you can configure it to use these service endpoints directly.
+
+**Add Prometheus as a Data Source in Grafana:**
+In Grafana, navigate to `Configuration > Data Sources` and click `Add data source` Select Prometheus.
+
+In the URL field, enter the internal service endpoint for Prometheus:
+```
+http://prometheus-operated.monitoring.svc.cluster.local:9090
+```
+Click `Save & Test` to confirm that Grafana can reach Prometheus.
+
+**Add Loki as a Data Source in Grafana:**
+Similarly, add a new data source in `Configuration > Data Sources` and select Loki. Set the URL to the internal service endpoint for Loki:
+```
+http://loki.monitoring.svc.cluster.local:3100
+```
+Click `Save & Test`.
+```
+Here’s the content converted into Markdown format:
+
+```markdown
+## 6. Creating a New Alert Rule in Grafana
+To set up alerting in Grafana, follow these steps:
+
+### Step 1: Go to the Alerting Section
+In the Grafana menu on the left, click on **Alerting** and then choose **Alert rules**.
+
+Click **New alert rule** to create a new alert.
+
+### Step 2: Enter Alert Rule Name
+In the **New alert rule** screen, give your alert a meaningful name in the **Name** field. This helps you identify the purpose of the alert.
+
+### Step 3: Define Query and Alert Condition
+In the **Define query and alert condition** section, set up the query that will trigger the alert.
+
+Click **Kick start your query** or use the **Label browser** to build a query.
+
+### Step 4: Set Alert Condition
+- **Reduce Function:**  
+  In the **Reduce** section, select a function to summarize the query output. This could be **Last**, **Average**, **Min**, or **Max**, depending on your needs. The **Mode** can be set to **Strict** or **Loose**, depending on how you want Grafana to interpret the result.
+
+- **Threshold Condition:**  
+  In the **Threshold** section, specify the condition that will trigger the alert.
+
+  For example, if you’re monitoring errors, you might set a condition that triggers if the count is **Above 0**. You can set the **Custom recovery threshold** if you want Grafana to notify when the condition returns to normal.
+
+### Step 5: Set the Rule Type
+Choose between **Grafana-managed** or **Data source-managed**:
+
+- **Grafana-managed** is generally recommended for simplicity and lets Grafana handle the alerting directly.
+
+### Step 6: Preview and Save the Alert
+Click **Preview** to view how the alert will function based on your query. If the alert condition meets your requirements, click **Save rule** and exit.
+
+---
+
+## Prometheus Alert Examples (PromQL)
+Here are some examples of alert queries for Prometheus metrics.
+
+### Example 1: High CPU Usage Alert
+This alert triggers if the CPU usage on a node goes above 80% over a 5-minute period.
+```promql
+100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+```
+**Explanation:** This query calculates the CPU usage percentage by subtracting the idle CPU percentage from 100%. If the result is greater than 80%, it will trigger the alert.
+
+### Example 2: Memory Usage Alert
+This alert triggers if the memory usage goes above 90% of total memory.
+```promql
+(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 90
+```
+
+---
+
+## Wrapping Up
+Setting up a powerful monitoring and logging solution with Grafana, Prometheus, and Loki may seem daunting at first. Yet, with the right steps, it can be a transformative experience for how you manage and visualize data across your infrastructure. My goal with this guide is to make these tools more accessible to everyone—from newcomers taking their first steps in monitoring to seasoned professionals looking to streamline their workflows.
+
+I hope this comprehensive walkthrough has given you the confidence to tackle the unique challenges of deploying these tools in traditional data centers, Docker, or Kubernetes environments. By following these hands-on steps, you’re well on your way to building a resilient and insightful monitoring system.
+
+Let’s keep learning and building together! If you have questions, feedback, or need further assistance, I’m here to help—please don’t hesitate to reach out at **Contact Me**.(m.asif.muzammil@gmail.com)
+
+**Happy monitoring!**
 ```
